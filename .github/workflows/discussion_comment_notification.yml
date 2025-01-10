@@ -1,0 +1,44 @@
+name: Discussion Comment Notification
+on:
+  discussion_comment:
+    types: [created, edited]
+  discussion:
+    types: [created]
+  issue_comment:
+    types: [created]
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if mentioned or new discussion
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "discussion_comment" && "${{ github.event.comment.body }}" == *"@13982720426"* ]]; then
+            echo "::set-output name=trigger::mention"
+          elif [[ "${{ github.event_name }}" == "discussion" && "${{ github.event.action }}" == "created" ]]; then
+            echo "::set-output name=trigger::new_discussion"
+          else
+            echo "::set-output name=trigger::none"
+          fi
+
+      - name: Send email notification for discussion actions
+        if: github.event_name == 'discussion' || github.event_name == 'discussion_comment'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: ${{ github.event_name == 'discussion' && 'New Discussion Created' || 'New Comment on Discussion' }}
+          html_body: |
+            <p>A new action was performed on a discussion: <a href="${{ github.event.discussion.html_url }}">${{ github.event.discussion.title }}</a></p>
+            <p>Category: <b>${{ github.event.discussion.category.name }}</b></p>
+            <p>Action type: <b>${{ github.event_name }}</b></p>
+            ${{ github.event_name == 'discussion_comment' && format('<p>Comment by: <b>{0}</b></p>', github.event.comment.user.login) || '' }}
+            ${{ github.event_name == 'discussion_comment' && format('<p>Comment content: <pre>{0}</pre></p>', github.event.comment.body) || '' }}
+            ${{ github.event_name == 'discussion' && format('<p>Discussion content: <pre>{0}</pre></p>', github.event.discussion.body) || '' }}
+            <p>Created at: <b>${{ github.event.discussion.created_at }}</b></p>
+          to: ${{ secrets.EMAIL_TO }}
+          cc: ${{ secrets.EMAIL_CC }}
+          bcc: ${{ secrets.EMAIL_BCC }}
+          from: GitHub Notifications <${{ secrets.EMAIL_USERNAME }}>
